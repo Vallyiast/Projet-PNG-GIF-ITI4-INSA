@@ -1,2 +1,2 @@
 # Projet-PNG-GIF-ITI4-INSA
-Projet du cours de théorie de l'information sur l'encodage PNG et GIF
+A comprehensive course project on information theory that implements and analyzes PNG and GIF encoding algorithms for efficent image compression.
