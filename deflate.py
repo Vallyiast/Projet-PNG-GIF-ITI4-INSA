@@ -141,7 +141,7 @@ def compressionLZ77(uncompressed_data):
             i += longueur
         else:
             resultat.append(uncompressed_data[i])
-            freq_map_litteral[ord(uncompressed_data[i])] += 1 
+            freq_map_litteral[uncompressed_data[i]] += 1 
             i+=1        
     return resultat, freq_map_litteral, freq_map_distances
 
@@ -210,14 +210,19 @@ def conversion_longueurs_symboles(list_longueurs):
 
     return result, list_extra
 
+def Hlen(liste):
+    """Renvoie le dernier indice non nul de la liste 
+    """
+    for i in range(len(liste)-1,0,-1):
+        if liste[i] != 0:
+            return i 
+    # raise Exception("Pas d'éléments non nuls!")
 
 
 def deflate(message: str):
     resultat = ""
 
     compressed_lz77, list_litt, list_distances = compressionLZ77(message)
-    print(compressed_lz77)
-
 
     # Obtention des arbres d'encodage des littéraux-longueurs et des distances
     arbre_litt = huff.generate_tree_list(list_litt)  #Liste [0-285] des littéraux et des décalages
@@ -234,8 +239,8 @@ def deflate(message: str):
     #Encodage des données
 
     for c in compressed_lz77:
-        if isinstance(c,str):
-            resultat += dico_litt[ord(c)]
+        if not isinstance(c,tuple):
+            resultat += dico_litt[c]
         else:
             length = c[0]
             distance = c[1]
@@ -274,32 +279,29 @@ def deflate(message: str):
         if c > 15:
             result += bin(extra_longueurs[index_extra])[2:]
             index_extra+=1
-    print(result)
+    print("second resultat intermédiaire",result)
 
     #Encodage de l'arbre d'encodage 
-    print("Litt",longueur_codes_arbres_litt)
-    print("Distance",longueur_codes_arbres_dist)
     longueurs_codes_arbre_longueurs = [len(dico_longueurs[index_c]) if index_c in dico_longueurs else 0 for index_c in range(19)]
-    
-    print("Longueurs",longueurs_codes_arbre_longueurs)
     rearanged_longueurs_codes_arbres_longueurs = [len(dico_longueurs[index_c]) if index_c in dico_longueurs else 0 for index_c in ORDRE_3ARBRE]
-    print(rearanged_longueurs_codes_arbres_longueurs)
+   
+    # HLIT, HDIST, HCLEN dernier indice non nul des listes
+    HLIT = Hlen(longueur_codes_arbres_litt) - 256
+    HDIST = Hlen(longueur_codes_arbres_dist) 
+    HCLEN = Hlen(rearanged_longueurs_codes_arbres_longueurs) - 3
+    print("HLIT, HDIST, HCLEN:",HLIT, HDIST, HCLEN)
 
-    HLIT = sum([1 if index_c in dico_litt else 0 for index_c in range(256+len(LENGTH_TABLE))])
-    HDIST = sum([1 if index_c in dico_distance else 0 for index_c in range(len(DISTANCE_TABLE))])
-    HCLEN = sum([1 if index_c in dico_longueurs else 0 for index_c in ORDRE_3ARBRE])
+    res = ""
+    res += bin(HLIT)[2:].zfill(5) + bin(HDIST)[2:].zfill(5) + bin(HCLEN)[2:].zfill(4)
 
+    for i in range(HCLEN+3):
+        res += bin(rearanged_longueurs_codes_arbres_longueurs[i])[2:].zfill(3)
+    print("troisième resultat intermédiaire",res)
+    return res+result+resultat
 
-    return result+resultat
-
-deflate(t)
-
-
-
-
-
-
-
+code = deflate(t)
+print("CODE:",code)
+print(hex(int(code,2)))
 
 def deflateLZW(message: str) -> tuple[str, dict, huff]:
     """Deflate algorithme utilisant compression LZW + Huffman
