@@ -18,7 +18,6 @@ def lempelziv(uncompressed):
         result.append(dico[w])
     return result, dico
 
-
 DISTANCE_TABLE = [
     # (premier nombre de la classe, symbole, nombre de bits supplémentaires)
     (1,0,0),
@@ -86,12 +85,21 @@ LENGTH_TABLE = [
 
 ORDRE_3ARBRE = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
   
-def conversion_classes(valeur,table):
+def conversion_classes_compression(valeur,table):
     """ Fonction pour convertir les valeurs selon la table
+        Renvoie (symbol, valeur extra bits, nombre extra bit)
     """
     for base,symbol,extra in table:
         if valeur>=base and valeur < base + 2**(extra):
             return (symbol,valeur-base,extra)
+
+def conversion_classes_decompression(symbole_compress,table):
+    """ Fonction pour convertir en valeur selon la table
+        Renvoie (symbol, valeur extra bits, nombre extra bit)
+    """
+    for base,symbol,extra in table:
+        if symbol == symbole_compress:
+            return base
 
 
 def compressionLZ77(uncompressed_data):
@@ -124,6 +132,7 @@ def compressionLZ77(uncompressed_data):
         return decalage_max, longueur_max
 
     resultat = [uncompressed_data[0]]
+    freq_map_litteral[uncompressed_data[0]] += 1 
     i = 1
     taille = len(uncompressed_data)
 
@@ -131,8 +140,8 @@ def compressionLZ77(uncompressed_data):
         decalage,longueur = correspondance_max(uncompressed_data[max(0,i-buffer_behind):i],uncompressed_data[i:min(len(uncompressed_data),i+buffer_ahead)],i)
      
         if longueur >3:
-            r1 = conversion_classes(longueur,LENGTH_TABLE)
-            r2 = conversion_classes(decalage,DISTANCE_TABLE)
+            r1 = conversion_classes_compression(longueur,LENGTH_TABLE)
+            r2 = conversion_classes_compression(decalage,DISTANCE_TABLE)
          
             freq_map_litteral[r1[0]] += 1 
             freq_map_distances[r2[0]] += 1 
@@ -142,14 +151,33 @@ def compressionLZ77(uncompressed_data):
         else:
             resultat.append(uncompressed_data[i])
             freq_map_litteral[uncompressed_data[i]] += 1 
-            i+=1        
+            i+=1   
+
     return resultat, freq_map_litteral, freq_map_distances
 
 
-s = "code code code code"
-t = "lorem ipsum versi color colem ispum veri color"
-lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor. Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, non fermentum diam nisl sit amet erat. Duis semper. Duis arcu massa, scelerisque vitae, consequat in, pretium a, enim. Pellentesque congue. Ut in risus volutpat libero pharetra tempor. Cras vestibulum bibendum augue. Praesent egestas leo in pede. Praesent blandit odio eu enim. Pellentesque sed dui ut augue blandit sodales. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Aliquam nibh. Mauris ac mauris sed pede pellentesque fermentum. Maecenas adipiscing ante non diam sodales hendrerit."
-resultLZ77 = compressionLZ77(t)
+def decompressionLZ77(compressed_message):
+    """Décompression des données encodées en LZ77 
+    """
+
+    message_initial = []
+    for index_compress, e in enumerate(compressed_message):
+        if isinstance(e,tuple):
+            longueur = conversion_classes_decompression(e[0][0],LENGTH_TABLE)+e[0][1]
+            distance = conversion_classes_decompression(e[1][0],DISTANCE_TABLE)+e[1][1]
+            message_initial.extend(message_initial[len(message_initial)-distance:len(message_initial)-distance+longueur])
+        else:
+            message_initial.append(e)
+    return message_initial
+
+
+t = "lorem lorem lorem lorem lorem"
+print(t)
+codeLZ77,list_litt,list_dist = compressionLZ77([ord(c) for c in t])
+print("CODE:",codeLZ77)
+decode = decompressionLZ77(codeLZ77)
+print("Message:",''.join([chr(e) for e in decode]))
+
 
 def conversion_longueurs_symboles(list_longueurs):
     """ Conversion des longueurs selon le RFC 1951:
@@ -221,9 +249,11 @@ def Hlen(liste):
 
 def deflate(message: str):
     resultat = ""
+    print("Message",message)
 
     compressed_lz77, list_litt, list_distances = compressionLZ77(message)
-
+    print("Message compressé par LZ77",compressed_lz77)
+ 
     # Obtention des arbres d'encodage des littéraux-longueurs et des distances
     arbre_litt = huff.generate_tree_list(list_litt)  #Liste [0-285] des littéraux et des décalages
     arbre_distance = huff.generate_tree_list(list_distances) #Liste des longueurs
@@ -299,9 +329,14 @@ def deflate(message: str):
     print("troisième resultat intermédiaire",res)
     return res+result+resultat
 
-code = deflate(t)
+
+"""
+t = "lorem ipsum versi color colem ispum veri color"
+
+code = deflate([ord(c) for c in t])
 print("CODE:",code)
 print(hex(int(code,2)))
+"""
 
 def deflateLZW(message: str) -> tuple[str, dict, huff]:
     """Deflate algorithme utilisant compression LZW + Huffman
