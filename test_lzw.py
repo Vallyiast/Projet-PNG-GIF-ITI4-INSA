@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-GIF Compression Script using LZW Algorithm
+Test script for LZW Compression and Decompression
 
-This script demonstrates LZW compression and decompression on image files.
+This script tests LZW compression and decompression on image files.
 It reads an image file, compresses it using LZW, decompresses it, and displays
 the original and reconstructed images for comparison.
 """
@@ -162,7 +162,7 @@ def compress_and_decompress_image(image_path: str) -> int:
 
 def main() -> int:
     """
-    Main function for GIF compression script.
+    Main function for LZW compression test script.
     
     Returns:
         int: Exit code (0 for success, 1 for error).
