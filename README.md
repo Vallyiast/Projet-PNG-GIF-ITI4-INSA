@@ -1,5 +1,6 @@
-# Projet-PNG-GIF-ITI4-INSA
-A comprehensive course project on information theory that implements and analyzes PNG and GIF encoding algorithms for efficient image compression.
+# Image Compression Algorithms - PNG & GIF
+
+A course project on information theory that implements the core lossless compression algorithms used in PNG and GIF image formats: LZW (Lempel-Ziv-Welch), Deflate (LZ77 + Huffman coding), and Huffman coding.
 
 ## LZW Compression
 
