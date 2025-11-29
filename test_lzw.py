@@ -108,17 +108,29 @@ def compress_and_decompress_image(image_path: str) -> int:
         if original_array.shape == decompressed_array.shape:
             difference = np.abs(original_array.astype(int) - decompressed_array.astype(int))
             max_diff = np.max(difference)
+            sum_diff = np.sum(difference)
             images_match = np.array_equal(original_array, decompressed_array)
         else:
             difference = None
             max_diff = None
+            sum_diff = None
             images_match = False
             print(f"Warning: Image shapes don't match!")
             print(f"  Original shape: {original_array.shape}")
             print(f"  Decompressed shape: {decompressed_array.shape}")
         
         # Display images
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        fig, axes = plt.subplots(1, 3, figsize=(18, 7))
+        # Maximize window if possible (works on some backends)
+        try:
+            manager = plt.get_current_fig_manager()
+            if hasattr(manager, 'window'):
+                if hasattr(manager.window, 'state'):
+                    manager.window.state('zoomed')  # Windows
+                elif hasattr(manager.window, 'wm_attributes'):
+                    manager.window.wm_attributes('-zoomed', True)  # Linux
+        except:
+            pass  # Fallback if maximization is not supported
         
         # Original image
         axes[0].imshow(original_array)
@@ -133,7 +145,7 @@ def compress_and_decompress_image(image_path: str) -> int:
         # Difference between images
         if difference is not None:
             axes[2].imshow(difference, cmap='hot')
-            axes[2].set_title(f'Difference')
+            axes[2].set_title(f'Difference (sum: {sum_diff:,})')
         else:
             axes[2].text(0.5, 0.5, 'Shape mismatch', 
                         ha='center', va='center', transform=axes[2].transAxes)
