@@ -50,3 +50,22 @@ def test_decompression(message):
     assert msg == decode
 
 
+@pytest.mark.parametrize("list_longueur", [[0, 0, 3, 1, 0, 4, 0, 5, 0, 4, 0, 3, 0, 4, 0, 0, 0, 5, 0]])
+def test_reconstruction_codes_huffman(list_longueur):
+    result = deflate.reconstruction_codes_huffman(list_longueur)
+
+    list_resultat = [len(bin(result[index]))-2 if index in result else 0 for index in range(19)]
+
+    assert list_longueur == list_resultat
+
+
+
+"""
+@pytest.mark.parametrize("message", [s,t])
+def test_lempelZiv(message):       
+    r,_,root = deflate.deflateLZW(message)
+    result = deflate.inflateLZW(r,root)
+    assert message == result
+"""
+
+

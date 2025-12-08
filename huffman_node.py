@@ -76,7 +76,5 @@ class HuffmanNode:
             HuffmanNode.set_binary_code(node.left, prefix+'0', mapping)
             HuffmanNode.set_binary_code(node.right, prefix+'1',mapping)
 
-    def encodage_hex():
-        """ 
-        """
+
 
