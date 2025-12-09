@@ -78,16 +78,17 @@ def conversion_classes_compression(valeur,table):
     for base,symbol,extra in table:
         if valeur>=base and valeur < base + 2**(extra):
             return (symbol,valeur-base,extra)
-    raise Exception(valeur+" n'est pas dans la table")
+   
+    raise Exception(str(valeur)+" n'est pas dans la table")
 
 def conversion_classes_decompression(symbole_compress,table):
     """ Fonction pour convertir en valeur selon la table
         Renvoie base
     """
-    for base,symbol,_ in table:
+    for base,symbol,nb_extra_bits in table:
         if symbol == symbole_compress:
-            return base
-    raise Exception(symbole_compress+" n'est pas dans la table")
+            return base,nb_extra_bits
+    raise Exception(str(symbole_compress)+" n'est pas dans la table")
 
 
 def compressionLZ77(uncompressed_data):
@@ -100,7 +101,7 @@ def compressionLZ77(uncompressed_data):
     freq_map_litteral = [0 for i in range(285)]
     freq_map_distances = [0 for i in range(30)]
 
-    def correspondance_max(fenetre_precedants, fenetre_suivants,position):
+    def correspondance_max(fenetre_precedants, fenetre_suivants):
         """
         """
         decalage_max = 0
@@ -116,7 +117,7 @@ def compressionLZ77(uncompressed_data):
         
             if longueur>longueur_max:
                 longueur_max = longueur
-                decalage_max = position-index_f
+                decalage_max = len(fenetre_precedants)-index_f
         return decalage_max, longueur_max
 
     resultat = [uncompressed_data[0]]
@@ -125,9 +126,9 @@ def compressionLZ77(uncompressed_data):
     taille = len(uncompressed_data)
 
     while i < taille:        
-        decalage,longueur = correspondance_max(uncompressed_data[max(0,i-buffer_behind):i],uncompressed_data[i:min(len(uncompressed_data),i+buffer_ahead)],i)
+        decalage,longueur = correspondance_max(uncompressed_data[max(0,i-buffer_behind):i],uncompressed_data[i:min(len(uncompressed_data),i+buffer_ahead)])
      
-        if longueur >3:
+        if longueur >=3:
             r1 = conversion_classes_compression(longueur,LENGTH_TABLE)
             r2 = conversion_classes_compression(decalage,DISTANCE_TABLE)
          
@@ -140,7 +141,9 @@ def compressionLZ77(uncompressed_data):
             resultat.append(uncompressed_data[i])
             freq_map_litteral[uncompressed_data[i]] += 1 
             i+=1   
-
+    #Fin de bloc
+    resultat.append(256)
+    freq_map_litteral[256] = 1 
     return resultat, freq_map_litteral, freq_map_distances
 
 def decompressionLZ77(compressed_message):
@@ -218,11 +221,11 @@ def conversion_longueurs_symboles(list_longueurs):
     return result, list_extra
 
 def Hlen(liste):
-    """Renvoie le dernier indice non nul de la liste 
+    """Renvoie le dernier indice non nul de la liste +1
     """
     for i in range(len(liste)-1,0,-1):
         if liste[i] != 0:
-            return i 
+            return i +1
     return 0
    
 def deflate(message: str):
@@ -232,17 +235,19 @@ def deflate(message: str):
     resultat = ""
 
     compressed_lz77, list_litt, list_distances = compressionLZ77(message)
- 
+  
     # Obtention des arbres d'encodage des littéraux-longueurs et des distances
     arbre_litt = huff.generate_tree_list(list_litt)  #Liste [0-285] des littéraux et des décalages
     arbre_distance = huff.generate_tree_list(list_distances) #Liste des longueurs
 
-    dico_litt = {}
-    huff.set_binary_code(arbre_litt,'', dico_litt)
+    dico_litt_temp = {}
+    huff.set_binary_code(arbre_litt,'', dico_litt_temp)
+    dico_litt = huff.huffman_canonique([len(dico_litt_temp[index]) if index in dico_litt_temp else 0 for index in range(285)])
     print("Dictionnaire des littéraux de l'arbre d'Huffman ",dico_litt)
 
-    dico_distance = {}
-    huff.set_binary_code(arbre_distance,'', dico_distance)
+    dico_distance_temp = {}
+    huff.set_binary_code(arbre_distance,'', dico_distance_temp)
+    dico_distance = huff.huffman_canonique([len(dico_distance_temp[index]) if index in dico_distance_temp else 0 for index in range(30)])
     print("Dictionnaire des distances de l'arbre d'Huffman ",dico_distance)
 
     #Encodage des données
@@ -262,23 +267,24 @@ def deflate(message: str):
                 resultat += bin(distance[1])[2:]
 
  
-
     # Construction du troisième arbre d'Huffman pour encoder les deux premiers
     longueur_codes_arbres_litt = [len(dico_litt[index_c]) if index_c in dico_litt else 0 for index_c in range(256+len(LENGTH_TABLE))]
     longueur_codes_arbres_dist = [len(dico_distance[index_c]) if index_c in dico_distance else 0 for index_c in range(len(DISTANCE_TABLE))]
 
-    symboles_longueurs, extra_longueurs = conversion_longueurs_symboles(longueur_codes_arbres_litt+longueur_codes_arbres_dist)
-    print("liste des symboles des longueurs", symboles_longueurs)
+    HLIT = Hlen(longueur_codes_arbres_litt) 
+    HDIST = Hlen(longueur_codes_arbres_dist) 
+
+    symboles_longueurs, extra_longueurs = conversion_longueurs_symboles(longueur_codes_arbres_litt[:HLIT]+longueur_codes_arbres_dist[:HDIST])
+
+    print("liste des symboles des longueurs des codes des litteraux-longueurs-distances", symboles_longueurs)
     print(extra_longueurs)
 
     dico_frequences_longueurs_codes_arbres = huff.freq_map(symboles_longueurs)
     arbres_encodage = huff.generate_tree(dico_frequences_longueurs_codes_arbres)
-
     dico_longueurs_temp = {}
     huff.set_binary_code(arbres_encodage,'', dico_longueurs_temp)
     list_longueur = [len(dico_longueurs_temp[index]) if index in dico_longueurs_temp else 0 for index in range(19)]
-    print(list_longueur)
-    dico_longueurs = huffman_canonique(list_longueur)
+    dico_longueurs = huff.huffman_canonique(list_longueur)
     print("Dictionnaire des codes des longueurs des codes ",dico_longueurs)
 
     #Encodage des arbres
@@ -294,76 +300,130 @@ def deflate(message: str):
     rearanged_longueurs_codes_arbres_longueurs = [list_longueur[index_c] for index_c in ORDRE_3ARBRE]
     print("rearanged",rearanged_longueurs_codes_arbres_longueurs)
     # HLIT, HDIST, HCLEN dernier indice non nul des listes
-    HLIT = Hlen(longueur_codes_arbres_litt) - 256
-    HDIST = Hlen(longueur_codes_arbres_dist) 
-    HCLEN = Hlen(rearanged_longueurs_codes_arbres_longueurs) - 3
+
+    HCLEN = Hlen(rearanged_longueurs_codes_arbres_longueurs) 
     #print("HLIT, HDIST, HCLEN:",HLIT, HDIST, HCLEN)
-
+    
+    print(HLIT,HDIST,HCLEN)
+    HLIT = HLIT-257
+    HDIST = HDIST-1
     res = ""
-    res += bin(HLIT)[2:].zfill(5) + bin(HDIST)[2:].zfill(5) + bin(HCLEN)[2:].zfill(4)
+    res += bin(HLIT)[2:].zfill(5) + bin(HDIST)[2:].zfill(5) + bin(HCLEN-4)[2:].zfill(4)
 
-    for i in range(HCLEN+4):
+    for i in range(HCLEN):
         res += bin(rearanged_longueurs_codes_arbres_longueurs[i])[2:].zfill(3)
   
-    return res+result+resultat
+    return res+"TREES"+result+"---DATA---"+resultat
 
-
-def huffman_canonique(list_longueur):
-    """Reconstruit le dictionnaire des codes de l'arbre d'Huffman avec la longueur des codes de chaque symbole par Huffman canonique
-        Renvoie la liste des codes pour les symboles d'indice i de [1,n] dans cet ordre
-    """
-    result = dict()
-
-    bl_count = huff.freq_map(list_longueur) #Compte le nombre de code de même longueur pour chaque longueur
-
-    code = 0
-    next_code = [0 for i in range(max(list_longueur)+1)]
-    for bits in range(2,max(list_longueur)+1):
-        if bits-1 in bl_count:
-            code = (code+bl_count[bits-1])*2
-        else:
-            code = code*2
-        next_code[bits] = code
-
-    for n in range(len(list_longueur)):
-        long = list_longueur[n]
-        if (long != 0):
-            result[n] = bin(next_code[long])[2:].zfill(long)
-            next_code[long]+=1
-   
-    return result
-"""
-result = huffman_canonique([0, 0, 3, 1, 0, 4, 0, 5, 0, 4, 0, 3, 0, 4, 0, 0, 0, 5, 0])
-print(result)
-"""
 
 def inflate(code):
     """ Réciproque de deflate
     """
     print("----------------INFLATE-------------")
 
-    HLIT = int(code[:5],2)
-    HDIST = int(code[5:10],2)
-    HCLEN = int(code[10:14],2)
-
+    # Lecture de HLIT, HDIST, HCLEN
+    HLIT = int(code[:5],2)+257
+    HDIST = int(code[5:10],2)+1
+    HCLEN = int(code[10:14],2)+4
+    print(HLIT,HDIST,HCLEN)
     encode = code[14:]
 
-    #print("HLIT, HDIST, HCLEN:",HLIT, HDIST, HCLEN)
-
+    #Lecture du troisième arbre
     list_longueur_code_arbre_longueurs_codes = [0 for i in range(len(ORDRE_3ARBRE))]
     
-    for i in range(HCLEN+4):
-        list_longueur_code_arbre_longueurs_codes[i] = int(encode[3*i:3*i+3],2)
-    
-    print("rearanged",list_longueur_code_arbre_longueurs_codes)
-    list_longueur_code_arbre_longueurs_sorted = [list_longueur_code_arbre_longueurs_codes[ORDRE_3ARBRE_INVERSE[index]] for index in range(len(ORDRE_3ARBRE))]
-    print(list_longueur_code_arbre_longueurs_sorted)
-    dict_code_unsorted_longueurs = huffman_canonique(list_longueur_code_arbre_longueurs_sorted)
-   
-    print("codes longueurs",dict_code_unsorted_longueurs)
+    for i in range(HCLEN):
+        list_longueur_code_arbre_longueurs_codes[ORDRE_3ARBRE[i]] = int(encode[3*i:3*i+3],2)
+    dico_codes_longueurs = huff.huffman_canonique(list_longueur_code_arbre_longueurs_codes)
+    arbre_longueurs = huff.recreate_tree_from_dict(dico_codes_longueurs)
+    encoded1 = encode[3*(HCLEN):]
 
+    print(encoded1[:6])
+    encoded1 = encoded1[5:]
+
+
+    print("Dictionnaire troisième arbre",dico_codes_longueurs)
+    
+
+    #Lectures des deux premiers arbres
+    lengths = []
+    temp_max = max(list_longueur_code_arbre_longueurs_codes)
+    while len(lengths) < HDIST+HLIT:
+        symbole,index = arbre_longueurs.decode_next_symbol(encoded1[:temp_max+1])
+      
+        encoded1 = encoded1[index:]
+
+        if symbole <= 15:
+            lengths.append(symbole)
+        elif symbole == 16:
+            nb_repet = int(encoded1[:2],2)+3
+            encoded1 = encoded1[2:]
+            lengths.extend([lengths[-1] for i in range(nb_repet)])
+        elif symbole == 17:
+            nb_repet = int(encoded1[:3],2)+3
+            encoded1 = encoded1[3:]
+            lengths.extend([0 for i in range(nb_repet)])
+
+        elif symbole == 18:
+            nb_repet = int(encoded1[:7],2)+11
+            print("18",nb_repet)
+            encoded1 = encoded1[7:]
+            lengths.extend([0 for i in range(nb_repet)])
+        else:
+            raise Exception("Erreur décompression")
+
+
+    print("data:",encoded1)
+
+    #Création des arbres
+    litlen_lengths = lengths[:HLIT]
+    dist_lengths = lengths[HLIT:HLIT+HDIST]
+    litlen_dict = huff.huffman_canonique(litlen_lengths)
+    dist_dict = huff.huffman_canonique(dist_lengths)
+    print("Dictionnaire littéraux",litlen_dict)
+    print("Dictionnaire distances",dist_dict)
+    litlen_tree = huff.recreate_tree_from_dict(litlen_dict)
+    dist_tree = huff.recreate_tree_from_dict(dist_dict)
+    temp_max_lit = max(litlen_lengths)
+    temp_max_dist = max(dist_lengths)
+    print("longueurs",HLIT,HDIST)
+
+
+    #Lecture des données
+    resultat_data = []
+
+    while True:
+        symbole,index = litlen_tree.decode_next_symbol(encoded1[:temp_max_lit+1])
+        encoded1 = encoded1[index:]
+
+        if symbole < 256:
+            resultat_data.append(symbole)
+        elif symbole == 256:
+            break
+        else:
+            base,nb_extra_bits = conversion_classes_decompression(symbole,LENGTH_TABLE)
+            valeur_extra = int("0"+encoded1[:nb_extra_bits],2)
+            encoded1=encoded1[nb_extra_bits:]
+            longueur = base+valeur_extra
+
+
+            symbole_dist,index = dist_tree.decode_next_symbol(encoded1[:temp_max_dist+1])
+            encoded1 = encoded1[index:]
+       
+            base,nb_extra_bits = conversion_classes_decompression(symbole_dist,DISTANCE_TABLE)
+            valeur_extra = int("0"+encoded1[:nb_extra_bits],2)
+            encoded1=encoded1[nb_extra_bits:]
+            distance = base+valeur_extra
+
+            resultat_data.extend(resultat_data[len(resultat_data)-distance:len(resultat_data)-distance+longueur])
+
+
+    return resultat_data
+
+
+"""
 t = "lorem ipsum versi color colem ispum veri color"
 
 code = deflate([ord(c) for c in t])
 
-inflate(code)
+#inflate(code)
+"""

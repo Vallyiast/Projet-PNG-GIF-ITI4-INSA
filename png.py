@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import deflate
-
+from PIL import Image
+import numpy as np
 
 image = [
     [[2,221,111],[22,22,11],[22,22,11]],
@@ -11,12 +12,12 @@ image = [
 def preparation_deflate(image,filtre_type=0):
     flux = []
     for i_l,ligne in enumerate(image):
-        flux.append(0)
+    
         for i_e,e in enumerate(ligne):
             flux.extend(e)
     return flux
 
-print(preparation_deflate(image))
 
-
-deflate.deflate(preparation_deflate(image))
+rose = Image.open("./test_repetitive.bmp")
+rose_array = np.array(rose)
+deflate.deflate(preparation_deflate(rose_array))
