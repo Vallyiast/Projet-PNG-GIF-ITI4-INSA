@@ -5,7 +5,7 @@ class HuffmanNode:
         self.left = left
         self.right = right
 
-    def toString(self):
+    def toString(self) -> str:
         a,b,c,d="","","",""
         if self.left is not None:
             a = "l="+self.left.toString()
@@ -24,8 +24,7 @@ class HuffmanNode:
                 dico[c] = 1
         return dico
 
-
-    def generate_tree(freq_map):
+    def generate_tree(freq_map: dict):
 
         list_nodes = {}
         for c in freq_map:
@@ -50,7 +49,7 @@ class HuffmanNode:
         
         return list(list_nodes.keys())[0]
 
-    def generate_tree_list(freq_list):
+    def generate_tree_list(freq_list : list):
         """Generate tree from list 
         """
 
@@ -78,14 +77,14 @@ class HuffmanNode:
         
         return list(list_nodes.keys())[0]
 
-    def set_binary_code(node, prefix, mapping):
+    def set_binary_code(node, prefix: str, mapping: dict):
         if node.left ==None and node.right ==None: 
             mapping[node.data] = prefix    
         else:             
             HuffmanNode.set_binary_code(node.left, prefix+'0', mapping)
             HuffmanNode.set_binary_code(node.right, prefix+'1',mapping)
 
-    def recreate_tree_from_dict(dictionnaire):
+    def recreate_tree_from_dict(dictionnaire : dict):
         root = HuffmanNode()
         for key, value in dictionnaire.items():
             node = root
@@ -115,7 +114,7 @@ class HuffmanNode:
              
         return node.data, i
 
-    def huffman_canonique(list_longueur):
+    def huffman_canonique(list_longueur : list):
         """Reconstruit le dictionnaire des codes de l'arbre d'Huffman avec la longueur des codes de chaque symbole par Huffman canonique
             Renvoie la liste des codes pour les symboles d'indice i de [1,n] dans cet ordre
         """

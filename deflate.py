@@ -69,9 +69,9 @@ LENGTH_TABLE = [
 ]
 
 ORDRE_3ARBRE = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
-ORDRE_3ARBRE_INVERSE = [3, 17, 15, 13, 11, 9, 7, 5, 4, 6, 8, 10, 12, 14, 16, 18, 0, 1, 2]
+#ORDRE_3ARBRE_INVERSE = [3, 17, 15, 13, 11, 9, 7, 5, 4, 6, 8, 10, 12, 14, 16, 18, 0, 1, 2]
   
-def conversion_classes_compression(valeur,table):
+def conversion_classes_compression(valeur: int,table: list[int]) -> (int,int,int):
     """ Fonction pour convertir les valeurs selon la table
         Renvoie (symbol, valeur extra bits, nombre extra bit)
     """
@@ -81,7 +81,7 @@ def conversion_classes_compression(valeur,table):
    
     raise Exception(str(valeur)+" n'est pas dans la table")
 
-def conversion_classes_decompression(symbole_compress,table):
+def conversion_classes_decompression(symbole_compress: int,table: list[int]) -> (int, int):
     """ Fonction pour convertir en valeur selon la table
         Renvoie base
     """
@@ -124,7 +124,6 @@ def compressionLZ77(uncompressed_data):
     freq_map_litteral[uncompressed_data[0]] += 1 
     i = 1
     taille = len(uncompressed_data)
-
     while i < taille:        
         decalage,longueur = correspondance_max(uncompressed_data[max(0,i-buffer_behind):i],uncompressed_data[i:min(len(uncompressed_data),i+buffer_ahead)])
      
@@ -149,19 +148,20 @@ def compressionLZ77(uncompressed_data):
 def decompressionLZ77(compressed_message):
     """Décompression des données encodées en LZ77 
     """
-
     message_initial = []
     for elt in compressed_message:
         if isinstance(elt,tuple):
-            longueur = conversion_classes_decompression(elt[0][0],LENGTH_TABLE)+elt[0][1]
-            distance = conversion_classes_decompression(elt[1][0],DISTANCE_TABLE)+elt[1][1]
+            longueur = conversion_classes_decompression(elt[0][0],LENGTH_TABLE)[0]+elt[0][1]
+            distance = conversion_classes_decompression(elt[1][0],DISTANCE_TABLE)[0]+elt[1][1]
             message_initial.extend(message_initial[len(message_initial)-distance:len(message_initial)-distance+longueur])
         else:
-            message_initial.append(elt)
+            if elt == 256:
+                return message_initial
+            else:
+                message_initial.append(elt)
     return message_initial
 
-
-def conversion_longueurs_symboles(list_longueurs):
+def conversion_longueurs_symboles(list_longueurs : list[int]) -> list[int]:
     """ Conversion des longueurs selon le RFC 1951:
             0 - 15: Represent code lengths of 0 - 15
             16: Copy the previous code length 3 - 6 times.
@@ -200,7 +200,6 @@ def conversion_longueurs_symboles(list_longueurs):
                 else:
                     result.extend([0 for i in range(reste_18_full)])
 
-
             else:
                 nb_16_full = nb_predecesseur//6 #Nombre de répétitions du symbole de plus de 6 fois
                 reste_16_full = nb_predecesseur%6
@@ -213,14 +212,42 @@ def conversion_longueurs_symboles(list_longueurs):
                 else:
                     result.extend([7 for i in range(reste_16_full)])
 
-
             result.append(l)
+
             predecesseur = l
             nb_predecesseur = 0
 
     return result, list_extra
 
-def Hlen(liste):
+def inversion_conversion_symbole_longueurs(list_symbole : list[int],list_extras : list[int]) -> list[int]:
+    """Fonction inverse de la fonction conversion_longueurs_symbole
+    """
+    result = []
+    index_extra = 0
+    for symbole in list_symbole:
+      
+        if symbole <= 15:            
+            result.append(symbole)
+            continue
+
+        elif symbole == 16:
+            nb_repet = list_extras[index_extra]
+            result.extend([result[-1] for i in range(nb_repet)])
+
+        elif symbole == 17:
+            nb_repet = list_extras[index_extra]
+            result.extend([0 for i in range(nb_repet)])
+
+        elif symbole == 18:
+            nb_repet = list_extras[index_extra]
+            result.extend([0 for i in range(nb_repet)])
+
+        else:
+            raise Exception("Erreur décompression")
+        index_extra +=1
+    return result
+
+def Hlen(liste: list[int]) -> int:
     """Renvoie le dernier indice non nul de la liste +1
     """
     for i in range(len(liste)-1,0,-1):
@@ -270,10 +297,12 @@ def deflate(message: str):
     # Construction du troisième arbre d'Huffman pour encoder les deux premiers
     longueur_codes_arbres_litt = [len(dico_litt[index_c]) if index_c in dico_litt else 0 for index_c in range(256+len(LENGTH_TABLE))]
     longueur_codes_arbres_dist = [len(dico_distance[index_c]) if index_c in dico_distance else 0 for index_c in range(len(DISTANCE_TABLE))]
-
+  
     HLIT = Hlen(longueur_codes_arbres_litt) 
     HDIST = Hlen(longueur_codes_arbres_dist) 
 
+
+    print(longueur_codes_arbres_litt[:HLIT]+longueur_codes_arbres_dist[:HDIST])
     symboles_longueurs, extra_longueurs = conversion_longueurs_symboles(longueur_codes_arbres_litt[:HLIT]+longueur_codes_arbres_dist[:HDIST])
 
     print("liste des symboles des longueurs des codes des litteraux-longueurs-distances", symboles_longueurs)
@@ -313,7 +342,7 @@ def deflate(message: str):
     for i in range(HCLEN):
         res += bin(rearanged_longueurs_codes_arbres_longueurs[i])[2:].zfill(3)
   
-    return res+"TREES"+result+"---DATA---"+resultat
+    return res+"--TREES"+result+"---Data"+resultat
 
 
 def inflate(code):
@@ -337,8 +366,8 @@ def inflate(code):
     arbre_longueurs = huff.recreate_tree_from_dict(dico_codes_longueurs)
     encoded1 = encode[3*(HCLEN):]
 
-    print(encoded1[:6])
-    encoded1 = encoded1[5:]
+    print(encoded1[:7])
+    encoded1 = encoded1[7:]
 
 
     print("Dictionnaire troisième arbre",dico_codes_longueurs)
@@ -365,7 +394,6 @@ def inflate(code):
 
         elif symbole == 18:
             nb_repet = int(encoded1[:7],2)+11
-            print("18",nb_repet)
             encoded1 = encoded1[7:]
             lengths.extend([0 for i in range(nb_repet)])
         else:
@@ -420,10 +448,9 @@ def inflate(code):
     return resultat_data
 
 
-"""
+
 t = "lorem ipsum versi color colem ispum veri color"
 
 code = deflate([ord(c) for c in t])
 
 #inflate(code)
-"""
