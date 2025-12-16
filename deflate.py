@@ -1,4 +1,6 @@
-"""Module implémentant l'algorithme Deflate 
+"""Module implémentant l'algorithme Deflate et Inflate
+Les sous-fonctions sont utilisés dans les fonctions deflate() et inflate()
+
 """
 
 from huffman_node import HuffmanNode as huff
@@ -90,7 +92,6 @@ def conversion_classes_decompression(symbole_compress: int,table: list[int]) -> 
             return base,nb_extra_bits
     raise Exception(str(symbole_compress)+" n'est pas dans la table")
 
-
 def compressionLZ77(uncompressed_data):
     """Fonction de compression Lempel-Ziv-1977
         Les distances utilisés dans DEFLATE vont jusqu'à 32768 octets et les longueurs jusqu'à 258 octets.
@@ -151,8 +152,8 @@ def decompressionLZ77(compressed_message):
     message_initial = []
     for elt in compressed_message:
         if isinstance(elt,tuple):
-            longueur = conversion_classes_decompression(elt[0][0],LENGTH_TABLE)[0]+elt[0][1]
-            distance = conversion_classes_decompression(elt[1][0],DISTANCE_TABLE)[0]+elt[1][1]
+            longueur = elt[0]
+            distance = elt[1]
             message_initial.extend(message_initial[len(message_initial)-distance:len(message_initial)-distance+longueur])
         else:
             if elt == 256:
@@ -161,63 +162,71 @@ def decompressionLZ77(compressed_message):
                 message_initial.append(elt)
     return message_initial
 
-def conversion_longueurs_symboles(list_longueurs : list[int]) -> list[int]:
-    """ Conversion des longueurs selon le RFC 1951:
-            0 - 15: Represent code lengths of 0 - 15
-            16: Copy the previous code length 3 - 6 times.
-                The next 2 bits indicate repeat length
-                        (0 = 3, ... , 3 = 6)
-                    Example:  Codes 8, 16 (+2 bits 11),
-                            16 (+2 bits 10) will expand to
-                            12 code lengths of 8 (1 + 6 + 5)
-            17: Repeat a code length of 0 for 3 - 10 times.
-                (3 bits of length)
-            18: Repeat a code length of 0 for 11 - 138 times
-                (7 bits of length)
+def conversion_longueurs_symboles(longueurs):
+    """Conversion d'une liste de symboles entre 0 et 15 en liste plus courte ou les plages sont converties en symboles
+            RFC 1951:
+               0 - 15: Represent code lengths of 0 - 15
+                   16: Copy the previous code length 3 - 6 times.
+                       The next 2 bits indicate repeat length
+                             (0 = 3, ... , 3 = 6)
+                          Example:  Codes 8, 16 (+2 bits 11),
+                                    16 (+2 bits 10) will expand to
+                                    12 code lengths of 8 (1 + 6 + 5)
+                   17: Repeat a code length of 0 for 3 - 10 times.
+                       (3 bits of length)
+                   18: Repeat a code length of 0 for 11 - 138 times
+                       (7 bits of length)
+        Retourne une liste de symboles 0–18 + liste de bits supplémentaires
     """
-    result = []
-    list_extra = [] #Liste des bits supplémentaires 
+    symbols = []
+    extra_bits = []
 
-    predecesseur = 16
-    nb_predecesseur = 0
+    i = 0
+    n = len(longueurs)
 
-    for l in list_longueurs:
-        if predecesseur == l:
-            nb_predecesseur +=1
+    while i < n:
+        cur = longueurs[i]
+
+        # compter la longueur du run
+        run = 1
+        while i + run < n and longueurs[i + run] == cur:
+            run += 1
+        i += run
+        if cur == 0:
+            # utiliser 17 ou 18
+            while run >= 11:
+                cnt = min(run, 138)
+                symbols.append(18)
+                extra_bits.append(bin(cnt - 11)[2:].zfill(7))
+                run -= cnt
+
+            if run >= 3:
+                symbols.append(17)
+                extra_bits.append(bin(run - 3)[2:].zfill(3))
+                run = 0
+
+            while run > 0:
+                symbols.append(0)
+                run -= 1
+
         else:
-            if predecesseur == 0:
-                nb_18_full = nb_predecesseur//138 #Nombre de répétitions de 0 de plus de 138 fois
-                reste_18_full = nb_predecesseur%138
-                for _ in range(nb_18_full):
-                    result.append(18)
-                    list_extra.append(127)
-                if reste_18_full>9:
-                    result.append(18)
-                    list_extra.append(reste_18_full)
-                elif reste_18_full>2:              
-                    result.append(17)
-                    list_extra.append(reste_18_full)
-                else:
-                    result.extend([0 for i in range(reste_18_full)])
+            # émettre la première valeur
+            symbols.append(cur)
+            run -= 1
 
-            else:
-                nb_16_full = nb_predecesseur//6 #Nombre de répétitions du symbole de plus de 6 fois
-                reste_16_full = nb_predecesseur%6
-                for _ in range(nb_16_full):
-                    result.append(16)
-                    list_extra.append(3)
-                if reste_16_full>2:
-                    result.append(16)
-                    list_extra.append(reste_16_full)
-                else:
-                    result.extend([7 for i in range(reste_16_full)])
+            # utiliser 16 pour les répétitions
+            while run >= 3:
+                cnt = min(run, 6)
+                symbols.append(16)
+                extra_bits.append(bin(cnt - 3)[2:].zfill(3))
+                run -= cnt
 
-            result.append(l)
+            while run > 0:
+                symbols.append(cur)
+                run -= 1
 
-            predecesseur = l
-            nb_predecesseur = 0
-
-    return result, list_extra
+        
+    return symbols, extra_bits
 
 def inversion_conversion_symbole_longueurs(list_symbole : list[int],list_extras : list[int]) -> list[int]:
     """Fonction inverse de la fonction conversion_longueurs_symbole
@@ -231,15 +240,15 @@ def inversion_conversion_symbole_longueurs(list_symbole : list[int],list_extras 
             continue
 
         elif symbole == 16:
-            nb_repet = list_extras[index_extra]
+            nb_repet = int(list_extras[index_extra],2)+3
             result.extend([result[-1] for i in range(nb_repet)])
 
         elif symbole == 17:
-            nb_repet = list_extras[index_extra]
+            nb_repet = int(list_extras[index_extra],2)+3
             result.extend([0 for i in range(nb_repet)])
 
         elif symbole == 18:
-            nb_repet = list_extras[index_extra]
+            nb_repet = int(list_extras[index_extra],2)+11
             result.extend([0 for i in range(nb_repet)])
 
         else:
@@ -254,12 +263,70 @@ def Hlen(liste: list[int]) -> int:
         if liste[i] != 0:
             return i +1
     return 0
-   
+
+def deflate_data(lz77_compressed_data, dico_litt, dico_dist):
+    """Compresse l'information lz77_compressed_data avec les dictionnaires de code des littéraux-longueurs et des distances
+        Renvoie les données compressés en bits
+    """
+    resultat = ""
+    for c in lz77_compressed_data:
+        if not isinstance(c,tuple):
+            resultat += dico_litt[c]
+        else:
+            length = c[0]
+            distance = c[1]
+
+            resultat += dico_litt[length[0]]
+            if length[2]>0:
+                resultat += bin(length[1])[2:].zfill(length[2])
+
+            resultat += dico_dist[distance[0]]
+            if distance[2]>0:
+                resultat += bin(distance[1])[2:].zfill(distance[2])
+    return resultat
+
+def inflate_data(binary_data, arbre_litt, arbre_dist, temp_max_lit, temp_max_dist):
+    """Décompresse les données compressés sous forme de bits en données du type list LZ77 littéraux+longueurs,distances
+        Renvoie la liste des littéraux avec les longueurs, distances
+    """
+    encoded = binary_data
+
+    resultat_data = []
+
+    while len(encoded)>0:
+        symbole,index = arbre_litt.decode_next_symbol(encoded[:temp_max_lit+1])
+     
+        encoded = encoded[index:]
+
+        if symbole < 256:
+            resultat_data.append(symbole)
+        elif symbole == 256:
+            resultat_data.append(symbole)
+            return resultat_data
+        else:
+            base,nb_extra_bits = conversion_classes_decompression(symbole,LENGTH_TABLE)
+            valeur_extra = int("0"+encoded[:nb_extra_bits],2)
+            encoded=encoded[nb_extra_bits:]
+            longueur = base+valeur_extra
+
+            symbole_dist,index = arbre_dist.decode_next_symbol(encoded[:temp_max_dist+1])
+          
+            encoded = encoded[index:]
+       
+            base,nb_extra_bits = conversion_classes_decompression(symbole_dist,DISTANCE_TABLE)
+            valeur_extra = int("0"+encoded[:nb_extra_bits],2)
+            encoded=encoded[nb_extra_bits:]
+            distance = base+valeur_extra
+
+            resultat_data.append((longueur,distance))
+
+    raise Exception("Pas de symbole (256) de fin!")
+
+
 def deflate(message: str):
     """Implémentation de l'algorithme Deflate
         Renvoie le code du message encodé avec Deflate
     """
-    resultat = ""
 
     compressed_lz77, list_litt, list_distances = compressionLZ77(message)
   
@@ -278,20 +345,7 @@ def deflate(message: str):
     print("Dictionnaire des distances de l'arbre d'Huffman ",dico_distance)
 
     #Encodage des données
-    for c in compressed_lz77:
-        if not isinstance(c,tuple):
-            resultat += dico_litt[c]
-        else:
-            length = c[0]
-            distance = c[1]
-
-            resultat += dico_litt[length[0]]
-            if length[2]>0:
-                resultat += bin(length[1])[2:]
-
-            resultat += dico_distance[distance[0]]
-            if distance[2]>0:
-                resultat += bin(distance[1])[2:]
+    resultat = deflate_data(compressed_lz77,dico_litt, dico_distance)
 
  
     # Construction du troisième arbre d'Huffman pour encoder les deux premiers
@@ -302,7 +356,8 @@ def deflate(message: str):
     HDIST = Hlen(longueur_codes_arbres_dist) 
 
 
-    print(longueur_codes_arbres_litt[:HLIT]+longueur_codes_arbres_dist[:HDIST])
+    print("litt",longueur_codes_arbres_litt[:HLIT])
+    print("dist",longueur_codes_arbres_dist[:HDIST])
     symboles_longueurs, extra_longueurs = conversion_longueurs_symboles(longueur_codes_arbres_litt[:HLIT]+longueur_codes_arbres_dist[:HDIST])
 
     print("liste des symboles des longueurs des codes des litteraux-longueurs-distances", symboles_longueurs)
@@ -322,7 +377,7 @@ def deflate(message: str):
     for i,c in enumerate(symboles_longueurs):
         result += dico_longueurs[c]
         if c > 15:
-            result += bin(extra_longueurs[index_extra])[2:]
+            result += extra_longueurs[index_extra]
             index_extra+=1
  
     #Encodage de l'arbre d'encodage 
@@ -333,7 +388,6 @@ def deflate(message: str):
     HCLEN = Hlen(rearanged_longueurs_codes_arbres_longueurs) 
     #print("HLIT, HDIST, HCLEN:",HLIT, HDIST, HCLEN)
     
-    print(HLIT,HDIST,HCLEN)
     HLIT = HLIT-257
     HDIST = HDIST-1
     res = ""
@@ -342,8 +396,7 @@ def deflate(message: str):
     for i in range(HCLEN):
         res += bin(rearanged_longueurs_codes_arbres_longueurs[i])[2:].zfill(3)
   
-    return res+"--TREES"+result+"---Data"+resultat
-
+    return res+result+resultat
 
 def inflate(code):
     """ Réciproque de deflate
@@ -354,7 +407,6 @@ def inflate(code):
     HLIT = int(code[:5],2)+257
     HDIST = int(code[5:10],2)+1
     HCLEN = int(code[10:14],2)+4
-    print(HLIT,HDIST,HCLEN)
     encode = code[14:]
 
     #Lecture du troisième arbre
@@ -367,7 +419,6 @@ def inflate(code):
     encoded1 = encode[3*(HCLEN):]
 
     print(encoded1[:7])
-    encoded1 = encoded1[7:]
 
 
     print("Dictionnaire troisième arbre",dico_codes_longueurs)
@@ -400,57 +451,20 @@ def inflate(code):
             raise Exception("Erreur décompression")
 
 
-    print("data:",encoded1)
+    print("data:",encoded1[:7])
 
     #Création des arbres
     litlen_lengths = lengths[:HLIT]
     dist_lengths = lengths[HLIT:HLIT+HDIST]
     litlen_dict = huff.huffman_canonique(litlen_lengths)
     dist_dict = huff.huffman_canonique(dist_lengths)
-    print("Dictionnaire littéraux",litlen_dict)
-    print("Dictionnaire distances",dist_dict)
     litlen_tree = huff.recreate_tree_from_dict(litlen_dict)
     dist_tree = huff.recreate_tree_from_dict(dist_dict)
     temp_max_lit = max(litlen_lengths)
     temp_max_dist = max(dist_lengths)
-    print("longueurs",HLIT,HDIST)
 
 
     #Lecture des données
-    resultat_data = []
-
-    while True:
-        symbole,index = litlen_tree.decode_next_symbol(encoded1[:temp_max_lit+1])
-        encoded1 = encoded1[index:]
-
-        if symbole < 256:
-            resultat_data.append(symbole)
-        elif symbole == 256:
-            break
-        else:
-            base,nb_extra_bits = conversion_classes_decompression(symbole,LENGTH_TABLE)
-            valeur_extra = int("0"+encoded1[:nb_extra_bits],2)
-            encoded1=encoded1[nb_extra_bits:]
-            longueur = base+valeur_extra
-
-
-            symbole_dist,index = dist_tree.decode_next_symbol(encoded1[:temp_max_dist+1])
-            encoded1 = encoded1[index:]
-       
-            base,nb_extra_bits = conversion_classes_decompression(symbole_dist,DISTANCE_TABLE)
-            valeur_extra = int("0"+encoded1[:nb_extra_bits],2)
-            encoded1=encoded1[nb_extra_bits:]
-            distance = base+valeur_extra
-
-            resultat_data.extend(resultat_data[len(resultat_data)-distance:len(resultat_data)-distance+longueur])
-
+    resultat_data = decompressionLZ77(inflate_data(encoded1, litlen_tree, dist_tree, temp_max_lit, temp_max_dist))
 
     return resultat_data
-
-
-
-t = "lorem ipsum versi color colem ispum veri color"
-
-code = deflate([ord(c) for c in t])
-
-#inflate(code)

@@ -139,14 +139,3 @@ class HuffmanNode:
     
         return result
            
-"""
-dico = {0: '0', 1: '11110', 3: '1100', 4: '100', 5: '1101', 6: '11111', 7: '1110', 18: '101'}
-
-root=HuffmanNode.recreate_tree_from_dict(dico)
-#print(root.toString())
-print(root.decode_next_symbol("11110011"))
-"""
-"""
-result = huffman_canonique([0, 0, 3, 1, 0, 4, 0, 5, 0, 4, 0, 3, 0, 4, 0, 0, 0, 5, 0])
-print(result)
-"""
